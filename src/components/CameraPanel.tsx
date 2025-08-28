@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { apiService, type Detection } from "@/services/api";
 
 interface CameraPanelProps {
+  detections?: Detection[];
   isDetected?: boolean;
   fps?: number;
 }
 
-export function CameraPanel({ isDetected = false, fps = 30 }: CameraPanelProps) {
+export function CameraPanel({ detections = [], isDetected = false, fps = 30 }: CameraPanelProps) {
   const [timestamp, setTimestamp] = useState<string>("");
+  const [streamError, setStreamError] = useState<boolean>(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -17,38 +20,65 @@ export function CameraPanel({ isDetected = false, fps = 30 }: CameraPanelProps) 
     return () => clearInterval(interval);
   }, []);
 
+  const handleImageError = () => {
+    setStreamError(true);
+  };
+
+  const handleImageLoad = () => {
+    setStreamError(false);
+  };
+
   return (
     <Card className="relative bg-panel border-border shadow-panel overflow-hidden">
       <div className="aspect-[2448/2048] bg-gradient-to-br from-panel to-card relative">
-        {/* Camera Feed Placeholder */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 mx-auto bg-primary/20 rounded-full flex items-center justify-center">
-              <div className="w-8 h-8 bg-primary rounded-full animate-pulse-slow" />
-            </div>
-            <div className="text-muted-foreground">
-              <p className="text-sm">Camera Feed</p>
-              <p className="text-xs">2448×2048 @ {fps} FPS</p>
+        {/* Real Camera Feed */}
+        {!streamError ? (
+          <img
+            src={apiService.getCameraStreamUrl()}
+            alt="Camera Feed"
+            className="w-full h-full object-contain"
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+          />
+        ) : (
+          /* Fallback when stream is unavailable */
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 mx-auto bg-destructive/20 rounded-full flex items-center justify-center">
+                <div className="w-8 h-8 bg-destructive rounded-full" />
+              </div>
+              <div className="text-muted-foreground">
+                <p className="text-sm">Camera Feed Unavailable</p>
+                <p className="text-xs">Check backend connection</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Overlay Annotations Simulation */}
-        {isDetected && (
+        {/* Real Detection Overlays */}
+        {detections.length > 0 && (
           <div className="absolute inset-0">
-            {/* Detection Box */}
-            <div className="absolute top-1/3 left-1/4 w-1/3 h-1/4 border-2 border-destructive bg-destructive/10 rounded-lg animate-pulse">
-              <div className="absolute -top-6 left-0 bg-destructive text-destructive-foreground px-2 py-1 rounded text-xs font-medium">
-                Defect: 85%
-              </div>
-            </div>
-            
-            {/* Additional detection areas */}
-            <div className="absolute top-1/2 right-1/4 w-1/6 h-1/8 border border-warning bg-warning/10 rounded">
-              <div className="absolute -top-5 left-0 bg-warning text-warning-foreground px-1 py-0.5 rounded text-xs">
-                Check: 72%
-              </div>
-            </div>
+            {detections.map((detection, index) => {
+              const [x, y, width, height] = detection.bbox;
+              const confidence = Math.round(detection.confidence * 100);
+              
+              return (
+                <div
+                  key={index}
+                  className="absolute border-2 border-destructive bg-destructive/10 rounded"
+                  style={{
+                    left: `${x}%`,
+                    top: `${y}%`,
+                    width: `${width}%`,
+                    height: `${height}%`,
+                  }}
+                >
+                  <div className="absolute -top-6 left-0 bg-destructive text-destructive-foreground px-2 py-1 rounded text-xs font-medium">
+                    {detection.class_name}: {confidence}%
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
